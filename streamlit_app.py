@@ -5,6 +5,7 @@ import sys
 import uuid
 import json
 from upstash_redis import Redis
+from streamlit_cookies_manager import CookieManager
 
 # --- Project Imports ---
 # Add project root to path to allow for clean imports when running with `streamlit run`
@@ -304,6 +305,9 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+# Initialize cookie manager
+cookies = CookieManager()
+
 # --- PERSISTENT HISTORY MANAGEMENT WITH REDIS ---
 @st.cache_resource
 def get_redis_connection():
@@ -319,36 +323,56 @@ def get_redis_connection():
 
 redis_conn = get_redis_connection()
 
-def save_history(session_id, messages, conn):
+def save_history(session_id, user_id, messages, conn):
     """Saves the chat history of a session to Redis."""
-    if not session_id or not conn:
+    if not all([session_id, user_id, conn]):
         return
     try:
-        # Use a key with a prefix for good practice, and set an expiration (e.g., 30 days)
-        conn.set(f"history:{session_id}", json.dumps(messages), ex=2592000)
+        # Use a pipeline for atomic operations
+        pipe = conn.pipeline()
+        # Save the actual chat messages
+        pipe.set(f"history:{session_id}", json.dumps(messages), ex=2592000) # Expire after 30 days
+        # Add this session to the user's sorted set of sessions, scored by timestamp
+        pipe.zadd(f"user_sessions:{user_id}", {session_id: time.time()})
+        pipe.execute()
     except Exception as e:
         st.error(f"Error saving history: {e}")
 
 def load_history(session_id, conn):
     """Loads the chat history of a session from Redis."""
-    if not session_id or not conn:
+    if not all([session_id, conn]):
         return []
     try:
         data = conn.get(f"history:{session_id}")
         if data:
             return json.loads(data)
     except Exception as e:
-        st.error(f"Error loading history: {e}")
+        # Don't show error for a simple load, just log it if needed
+        # st.error(f"Error loading history: {e}")
+        pass
     return []
 
-def delete_history(session_id, conn):
+def delete_history(session_id, user_id, conn):
     """Deletes the history for a session from Redis."""
-    if not session_id or not conn:
+    if not all([session_id, user_id, conn]):
         return
     try:
-        conn.delete(f"history:{session_id}")
+        pipe = conn.pipeline()
+        pipe.delete(f"history:{session_id}") # Delete the history itself
+        pipe.zrem(f"user_sessions:{user_id}", session_id) # Remove from user's list
+        pipe.execute()
     except Exception as e:
         st.error(f"Error deleting history: {e}")
+
+def get_user_sessions(user_id, conn):
+    """Retrieves all session IDs for a user, sorted from newest to oldest."""
+    if not all([user_id, conn]):
+        return []
+    try:
+        # ZREVRANGE gets items from a sorted set in reverse order (highest score first)
+        return conn.zrevrange(f"user_sessions:{user_id}", 0, -1)
+    except Exception:
+        return []
 
 # --- Caching and Initialization ---
 @st.cache_resource
@@ -359,11 +383,19 @@ def load_rag_graph():
     """
     rag_graph = initialize_components()
     if rag_graph is None:
-        st.error("❌ Failed to initialize the RAG system. Please check the logs. You might need to run 'python build_index.py' first.", icon="🚨")
+        st.error("❌ Failed to initialize the RAG system. Please check the logs.", icon="🚨")
         st.stop()
     return rag_graph
 
 rag_graph = load_rag_graph()
+
+# --- USER IDENTITY MANAGEMENT ---
+if 'user_id' not in st.session_state:
+    user_id = cookies.get('user_id')
+    if not user_id:
+        user_id = str(uuid.uuid4())
+        cookies.set('user_id', user_id, expires_in=365*24*60*60) # Cookie for 1 year
+    st.session_state.user_id = user_id
 
 # --- Enhanced Sidebar for Controls and Info ---
 with st.sidebar:
@@ -375,12 +407,33 @@ with st.sidebar:
     
     st.markdown("## Controls & Information")
     
-    if st.button("🗑️ Clear Conversation", use_container_width=True):
-        delete_history(st.session_state.get("session_id"), redis_conn)
-        st.session_state.messages = [] # Clear session state
-        st.success("✨ History cleared!", icon="🎉")
-        time.sleep(1)
+    if st.button("➕ New Chat", use_container_width=True):
+        # A new chat is just a navigation to a URL without a session_id
+        st.query_params.clear()
         st.rerun()
+
+    st.divider()
+
+    st.markdown("### 📜 Chat History")
+    user_id = st.session_state.get("user_id")
+    if user_id and redis_conn:
+        user_sessions = get_user_sessions(user_id, redis_conn)
+        if user_sessions:
+            for sess_id in user_sessions:
+                history = load_history(sess_id, redis_conn)
+                if history:
+                    # Use the first user message as the title, truncate if long
+                    title = history[0].get('content', 'Chat')
+                    title = (title[:35] + '...') if len(title) > 35 else title
+                    
+                    # Use columns to add a delete button
+                    col1, col2 = st.columns([4, 1])
+                    with col1:
+                        if st.button(title, key=f"session_{sess_id}", use_container_width=True):
+                            st.query_params["session_id"] = sess_id
+                            st.rerun()
+        else:
+            st.caption("No past conversations yet.")
 
     st.divider()
     
@@ -411,14 +464,14 @@ with st.sidebar:
 
 # --- Enhanced Chat Logic ---
 
-# --- Session ID Management ---
-# Use URL query params for a persistent, bookmarkable session ID
+# --- SESSION ID & HISTORY MANAGEMENT ---
 if "session_id" not in st.query_params:
     session_id = str(uuid.uuid4())
     st.query_params["session_id"] = session_id
 else:
     session_id = st.query_params["session_id"]
 
+# Store in session_state for easy access throughout the script
 st.session_state["session_id"] = session_id # Store for easy access
 
 # Initialize chat history in session state if it doesn't exist
@@ -426,6 +479,14 @@ if "messages" not in st.session_state:
     st.session_state.messages = load_history(session_id, redis_conn)
 
 # Display past messages from history
+if not st.session_state.messages:
+    st.info("Welcome! Ask me anything about the 2IS Master's program to start the conversation.")
+
+# Add a clear button only if there is history
+if st.session_state.messages:
+    if st.button("🗑️ Clear This Conversation"):
+        delete_history(session_id, st.session_state.user_id, redis_conn)
+        st.rerun()
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
@@ -472,6 +533,11 @@ if prompt := st.chat_input("💬 Ask me anything about the 2IS Master's program.
                         if sources:
                             st.caption(f"📎 **Sources:** {', '.join(sources)}")
                 
+                # If we have an answer, we can stop waiting. This improves the user experience
+                # by hiding the spinner as soon as the answer is displayed.
+                if full_response:
+                    break
+
         # so we don't need to handle the `evaluate_answer` node here anymore.
         # This simplifies the code and speeds up the user experience.
         
@@ -487,4 +553,4 @@ if prompt := st.chat_input("💬 Ask me anything about the 2IS Master's program.
         assistant_message = {"role": "assistant", "content": full_response, "sources": sources}
         st.session_state.messages.append(assistant_message)
         # Save the updated history to the file
-        save_history(session_id, st.session_state.messages, redis_conn)
+        save_history(session_id, st.session_state.user_id, st.session_state.messages, redis_conn)

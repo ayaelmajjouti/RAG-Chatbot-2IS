@@ -10,3 +10,4 @@ numpy
 langchain
 google-generativeai
 upstash-redis
+streamlit-cookies-manager
