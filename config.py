@@ -3,8 +3,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 class Config:
-    # Target URL for the scraper
-    TARGET_URL = "https://miage.ut-capitole.fr/accueil/international/master-innovative-information-systems-2is"
+    # A list of starting URLs for the scraper. It will crawl pages linked from these starting points.
+    TARGET_URLS = [
+        "https://miage.ut-capitole.fr/accueil/international/master-innovative-information-systems-2is",
+        "https://cours24-25.ut-capitole.fr/course/view.php?id=10157"
+    ]
     
     # Add your direct PDF links here. The scraper will download and process them.
     # Example: "https://example.com/path/to/document.pdf"
@@ -30,7 +33,9 @@ class Config:
     # OpenRouter API
     OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
     OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
-    OPENROUTER_MODEL = "deepseek/deepseek-r1-0528:free" # llm used for generation
+    # The model used for generation. Free models can have variable latency.
+    # "mistralai/mistral-7b-instruct:free" is often a faster alternative.
+    OPENROUTER_MODEL = "mistralai/mistral-7b-instruct:free"
     
     # RAG settings
     SIMILARITY_THRESHOLD = 0.3  # Min similarity score for a chunk to be considered relevant
