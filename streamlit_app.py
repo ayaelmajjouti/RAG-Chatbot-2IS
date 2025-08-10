@@ -390,11 +390,14 @@ def load_rag_graph():
 rag_graph = load_rag_graph()
 
 # --- USER IDENTITY MANAGEMENT ---
+cookies.sync() # This is the key fix: it waits for the cookies to be ready from the browser.
+
 if 'user_id' not in st.session_state:
     user_id = cookies.get('user_id')
     if not user_id:
         user_id = str(uuid.uuid4())
-        cookies.set('user_id', user_id, expires_in=365*24*60*60) # Cookie for 1 year
+        cookies['user_id'] = user_id # Use dictionary-style assignment
+        cookies.save() # Explicitly save the cookie to the browser
     st.session_state.user_id = user_id
 
 # --- Enhanced Sidebar for Controls and Info ---
