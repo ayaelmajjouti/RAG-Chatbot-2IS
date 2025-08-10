@@ -9,3 +9,4 @@ pypdf
 numpy
 langchain
 google-generativeai
+upstash-redis

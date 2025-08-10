@@ -4,6 +4,7 @@ import os
 import sys
 import uuid
 import json
+from upstash_redis import Redis
 
 # --- Project Imports ---
 # Add project root to path to allow for clean imports when running with `streamlit run`
@@ -303,42 +304,49 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# --- HISTORY MANAGEMENT ---
-HISTORY_DIR = "chat_histories"
-os.makedirs(HISTORY_DIR, exist_ok=True)
+# --- PERSISTENT HISTORY MANAGEMENT WITH REDIS ---
+@st.cache_resource
+def get_redis_connection():
+    """Establishes a connection to the Upstash Redis database."""
+    try:
+        # This automatically reads UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN from st.secrets
+        conn = Redis.from_env()
+        conn.ping() # Test the connection
+        return conn
+    except Exception as e:
+        st.error(f"Failed to connect to Redis history database: {e}. Please check your Upstash secrets in Streamlit Cloud.")
+        return None
 
-def save_history(session_id, messages):
-    """Saves the chat history of a session to a JSON file."""
-    if not session_id:
+redis_conn = get_redis_connection()
+
+def save_history(session_id, messages, conn):
+    """Saves the chat history of a session to Redis."""
+    if not session_id or not conn:
         return
     try:
-        file_path = os.path.join(HISTORY_DIR, f"{session_id}.json")
-        with open(file_path, 'w') as f:
-            json.dump(messages, f, indent=2)
+        # Use a key with a prefix for good practice, and set an expiration (e.g., 30 days)
+        conn.set(f"history:{session_id}", json.dumps(messages), ex=2592000)
     except Exception as e:
         st.error(f"Error saving history: {e}")
 
-def load_history(session_id):
-    """Loads the chat history of a session from a JSON file."""
-    if not session_id:
+def load_history(session_id, conn):
+    """Loads the chat history of a session from Redis."""
+    if not session_id or not conn:
         return []
     try:
-        file_path = os.path.join(HISTORY_DIR, f"{session_id}.json")
-        if os.path.exists(file_path):
-            with open(file_path, 'r') as f:
-                return json.load(f)
+        data = conn.get(f"history:{session_id}")
+        if data:
+            return json.loads(data)
     except Exception as e:
         st.error(f"Error loading history: {e}")
     return []
 
-def delete_history(session_id):
-    """Deletes the history file for a session."""
-    if not session_id:
+def delete_history(session_id, conn):
+    """Deletes the history for a session from Redis."""
+    if not session_id or not conn:
         return
     try:
-        file_path = os.path.join(HISTORY_DIR, f"{session_id}.json")
-        if os.path.exists(file_path):
-            os.remove(file_path)
+        conn.delete(f"history:{session_id}")
     except Exception as e:
         st.error(f"Error deleting history: {e}")
 
@@ -368,7 +376,7 @@ with st.sidebar:
     st.markdown("## Controls & Information")
     
     if st.button("🗑️ Clear Conversation", use_container_width=True):
-        delete_history(st.session_state.get("session_id"))
+        delete_history(st.session_state.get("session_id"), redis_conn)
         st.session_state.messages = [] # Clear session state
         st.success("✨ History cleared!", icon="🎉")
         time.sleep(1)
@@ -415,7 +423,7 @@ st.session_state["session_id"] = session_id # Store for easy access
 
 # Initialize chat history in session state if it doesn't exist
 if "messages" not in st.session_state:
-    st.session_state.messages = load_history(session_id)
+    st.session_state.messages = load_history(session_id, redis_conn)
 
 # Display past messages from history
 for message in st.session_state.messages:
@@ -479,4 +487,4 @@ if prompt := st.chat_input("💬 Ask me anything about the 2IS Master's program.
         assistant_message = {"role": "assistant", "content": full_response, "sources": sources}
         st.session_state.messages.append(assistant_message)
         # Save the updated history to the file
-        save_history(session_id, st.session_state.messages)
+        save_history(session_id, st.session_state.messages, redis_conn)
