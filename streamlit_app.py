@@ -4,8 +4,9 @@ import os
 import sys
 import uuid
 import json
+import datetime
 from upstash_redis import Redis
-from streamlit_cookies_manager import CookieManager
+import extra_streamlit_components as stx
 
 # --- Project Imports ---
 # Add project root to path to allow for clean imports when running with `streamlit run`
@@ -305,8 +306,15 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# Initialize cookie manager
-cookies = CookieManager()
+@st.cache_resource
+def get_cookie_manager():
+    """
+    Returns a CookieManager instance. Caching this prevents re-initialization
+    on every script run and handles the initial setup gracefully.
+    """
+    return stx.CookieManager()
+
+cookies = get_cookie_manager()
 
 # --- PERSISTENT HISTORY MANAGEMENT WITH REDIS ---
 @st.cache_resource
@@ -390,18 +398,19 @@ def load_rag_graph():
 rag_graph = load_rag_graph()
 
 # --- USER IDENTITY MANAGEMENT ---
-# This logic is structured to handle the initial race condition of the cookie manager.
+# This logic uses the more robust extra-streamlit-components cookie manager.
 if 'user_id' not in st.session_state:
-    try:
-        # On a subsequent run, this will succeed and load the existing cookie.
-        st.session_state.user_id = cookies['user_id']
-    except (KeyError, Exception): # Catches KeyError for new users and CookiesNotReady on first load.
-        # On the first run, or if the cookie is missing, this block will run.
+    # Get the user_id from the browser's cookies. It will return None if not found.
+    user_id = cookies.get('user_id')
+    
+    # If the cookie doesn't exist, this is a new user.
+    if not user_id:
         user_id = str(uuid.uuid4())
-        cookies['user_id'] = user_id # This sets the cookie in the browser.
-        st.session_state.user_id = user_id
-        # Rerun to ensure the cookie is set and the app state is consistent.
-        st.rerun()
+        # Set the cookie in the user's browser, making it expire in a year.
+        cookies.set('user_id', user_id, expires_at=datetime.datetime.now() + datetime.timedelta(days=365))
+    
+    # Store the user_id in the session state for this run.
+    st.session_state.user_id = user_id
 
 # --- Enhanced Sidebar for Controls and Info ---
 with st.sidebar:
