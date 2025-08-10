@@ -1,5 +1,7 @@
 import requests
 import json
+import time
+import random
 from typing import List, Dict, Tuple
 from config import config
 import logging
@@ -127,40 +129,56 @@ CONTEXT:
         user_message = prompt
             
         messages.append({"role": "user", "content": user_message})
-        try:
-            response = requests.post(
-                config.OPENROUTER_API_URL, 
-                headers=self.headers, 
-                json={
-                    "model": config.OPENROUTER_MODEL, 
-                    "messages": messages, 
-                    "temperature": 0.7, 
-                    "max_tokens": 2048 
-                }, 
-                timeout=30
-            )
-            response.raise_for_status()
-            response_data = response.json()
-            if 'choices' not in response_data or not response_data.get('choices'):
-                error_details = response_data.get('error', response_data)
-                logger.error(f"OpenRouter API did not return 'choices'. Response: {json.dumps(error_details, indent=2)}")
-                error_message = error_details.get('message', 'The API returned an unexpected response.')
-                return f"Error from API: {error_message}"
-            return response_data['choices'][0]['message']['content']
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Request to OpenRouter API failed: {str(e)}")
-            # Provide more specific, user-friendly error messages
-            if e.response is not None:
-                if e.response.status_code == 401:
-                    return "API Error: Unauthorized. Please check your API key."
-                if e.response.status_code == 402:
-                    return "API Error: Payment Required. Please check your OpenRouter account credits."
-            return f"Error: A network problem occurred while connecting to the API."
-        except json.JSONDecodeError:
-            logger.error(f"Failed to decode JSON response from OpenRouter. Response text: {response.text}")
-            return "Error: Could not understand the response from the API."
-        except Exception as e:
-            logger.error(f"An unexpected error occurred in query_openrouter: {str(e)}")
-            return f"An unexpected error occurred: {str(e)}"
+        
+        # --- Retry Logic with Exponential Backoff ---
+        max_retries = 3
+        base_delay = 1.0  # seconds
+
+        for attempt in range(max_retries):
+            try:
+                response = requests.post(
+                    config.OPENROUTER_API_URL, 
+                    headers=self.headers, 
+                    json={
+                        "model": config.OPENROUTER_MODEL, 
+                        "messages": messages, 
+                        "temperature": 0.7, 
+                        "max_tokens": 2048 
+                    }, 
+                    timeout=30
+                )
+                response.raise_for_status() # Raises HTTPError for 4xx/5xx responses
+                response_data = response.json()
+                if 'choices' not in response_data or not response_data.get('choices'):
+                    error_details = response_data.get('error', response_data)
+                    logger.error(f"OpenRouter API did not return 'choices'. Response: {json.dumps(error_details, indent=2)}")
+                    error_message = error_details.get('message', 'The API returned an unexpected response.')
+                    return f"Error from API: {error_message}"
+                return response_data['choices'][0]['message']['content']
+            
+            except requests.exceptions.RequestException as e:
+                # Check if the error is a 429 Too Many Requests
+                if e.response is not None and e.response.status_code == 429:
+                    if attempt < max_retries - 1:
+                        delay = base_delay * (2 ** attempt) + random.uniform(0, 1)
+                        logger.warning(f"Rate limit hit. Retrying in {delay:.2f} seconds... (Attempt {attempt + 1}/{max_retries})")
+                        time.sleep(delay)
+                        continue # Go to the next attempt
+                    else:
+                        logger.error(f"Rate limit error after {max_retries} retries. Aborting.")
+                        return "API Error: The service is currently busy. Please try again in a moment."
+                
+                # Handle other network/HTTP errors
+                logger.error(f"Request to OpenRouter API failed: {str(e)}")
+                if e.response is not None:
+                    if e.response.status_code == 401: return "API Error: Unauthorized. Please check your API key."
+                    if e.response.status_code == 402: return "API Error: Payment Required. Please check your OpenRouter account credits."
+                return "Error: A network problem occurred while connecting to the API."
+            
+            except (json.JSONDecodeError, Exception) as e:
+                logger.error(f"An unexpected error occurred in query_openrouter: {str(e)}")
+                return f"An unexpected error occurred: {str(e)}"
+        
+        return "Error: The API is currently unavailable after multiple attempts."
         
     
