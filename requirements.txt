@@ -9,5 +9,3 @@ pypdf
 numpy
 langchain
 google-generativeai
-upstash-redis
-extra-streamlit-components
