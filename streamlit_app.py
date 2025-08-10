@@ -390,15 +390,18 @@ def load_rag_graph():
 rag_graph = load_rag_graph()
 
 # --- USER IDENTITY MANAGEMENT ---
-cookies.sync() # This is the key fix: it waits for the cookies to be ready from the browser.
-
+# This logic is structured to handle the initial race condition of the cookie manager.
 if 'user_id' not in st.session_state:
-    user_id = cookies.get('user_id')
-    if not user_id:
+    try:
+        # On a subsequent run, this will succeed and load the existing cookie.
+        st.session_state.user_id = cookies['user_id']
+    except (KeyError, Exception): # Catches KeyError for new users and CookiesNotReady on first load.
+        # On the first run, or if the cookie is missing, this block will run.
         user_id = str(uuid.uuid4())
-        cookies['user_id'] = user_id # Use dictionary-style assignment
-        cookies.save() # Explicitly save the cookie to the browser
-    st.session_state.user_id = user_id
+        cookies['user_id'] = user_id # This sets the cookie in the browser.
+        st.session_state.user_id = user_id
+        # Rerun to ensure the cookie is set and the app state is consistent.
+        st.rerun()
 
 # --- Enhanced Sidebar for Controls and Info ---
 with st.sidebar:
@@ -430,10 +433,14 @@ with st.sidebar:
                     title = (title[:35] + '...') if len(title) > 35 else title
                     
                     # Use columns to add a delete button
-                    col1, col2 = st.columns([4, 1])
+                    col1, col2 = st.columns([5, 1])
                     with col1:
                         if st.button(title, key=f"session_{sess_id}", use_container_width=True):
                             st.query_params["session_id"] = sess_id
+                            st.rerun()
+                    with col2:
+                        if st.button("🗑️", key=f"delete_{sess_id}", use_container_width=True, help="Delete this conversation"):
+                            delete_history(sess_id, user_id, redis_conn)
                             st.rerun()
         else:
             st.caption("No past conversations yet.")
