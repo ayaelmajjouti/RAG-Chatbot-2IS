@@ -3,15 +3,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 class Config:
-    # A list of starting URLs for the scraper. It will crawl pages linked from these starting points.
-    TARGET_URLS = [
-        "https://miage.ut-capitole.fr/accueil/international/master-innovative-information-systems-2is",
-        "https://cours24-25.ut-capitole.fr/course/view.php?id=10157"
-    ]
+    # Target URL for the scraper
+    TARGET_URLS = ["https://miage.ut-capitole.fr/accueil/international/master-innovative-information-systems-2is", 
+                  "https://capitole.adv-pub.moveonfr.com/home-page-1578/"]
     
     # Add your direct PDF links here. The scraper will download and process them.
     # Example: "https://example.com/path/to/document.pdf"
-    PDF_URLS = ["https://miage.ut-capitole.fr/medias/fichier/final-new-2024-flyer-master-2is_1729089997241-pdf?ID_FICHE=573467&INLINE=FALSE","https://miage.ut-capitole.fr/medias/fichier/syllabus-book-2024-25_1738767357979-pdf?ID_FICHE=573467&INLINE=FALSE","https://miage.ut-capitole.fr/medias/fichier/final-en-24-25-livret-accueil-etudiant_1730728450007-pdf?ID_FICHE=573467&INLINE=FALSE"]
+    PDF_URLS = ["https://miage.ut-capitole.fr/medias/fichier/final-new-2024-flyer-master-2is_1729089997241-pdf?ID_FICHE=573467&INLINE=FALSE","https://miage.ut-capitole.fr/medias/fichier/syllabus-book-2024-25_1738767357979-pdf?ID_FICHE=573467&INLINE=FALSE","https://miage.ut-capitole.fr/medias/fichier/final-en-24-25-livret-accueil-etudiant_1730728450007-pdf?ID_FICHE=573467&INLINE=FALSE","https://www.ut-capitole.fr/medias/fichier/master-1-informatique-selection-s2-2025-26_1750691650232-pdf"]
 
      # Automatically find the syllabus PDF URL for providing helpful suggestions
     SYLLABUS_PDF_URL = next((url for url in PDF_URLS if "syllabus-book" in url), None)
@@ -33,9 +31,7 @@ class Config:
     # OpenRouter API
     OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
     OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
-    # The model used for generation. Free models can have variable latency.
-    # "mistralai/mistral-7b-instruct:free" is often a faster alternative.
-    OPENROUTER_MODEL = "mistralai/mistral-7b-instruct:free"
+    OPENROUTER_MODEL = "deepseek/deepseek-r1-0528:free" # llm used for generation
     
     # RAG settings
     SIMILARITY_THRESHOLD = 0.3  # Min similarity score for a chunk to be considered relevant
