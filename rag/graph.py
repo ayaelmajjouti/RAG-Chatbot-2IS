@@ -3,6 +3,7 @@ import logging
 import re 
 import json
 from base_rag import BaseRAG
+from config import config
 
 
 from .openrouter_rag import OpenRouterRAG
@@ -267,9 +268,17 @@ User's off-topic question: "{question}" """
         
         # If we found syllabus docs, use them as the primary source.
         if structured_course_data:
-            context = json.dumps(structured_course_data, indent=2)
+            # --- CONTEXT TRUNCATION to prevent overly large API requests ---
+            context = ""
+            for course in structured_course_data:
+                course_str = json.dumps(course, indent=2) + "\n"
+                if len(context) + len(course_str) > config.MAX_CONTEXT_LENGTH:
+                    logger.warning(f"Context limit reached in find_and_list_courses. Truncating course list.")
+                    print(f"DEBUG: Context limit reached. Truncating course list.")
+                    break
+                context += course_str
             sources = ["local_json://Syllabus.json"]
-            print(f"DEBUG: Using structured course data with {len(structured_course_data)} courses")
+            print(f"DEBUG: Using structured course data (truncated if necessary)")
         else:
             # Fallback logic
             print(f"DEBUG: No matching courses found, falling back to general search")
