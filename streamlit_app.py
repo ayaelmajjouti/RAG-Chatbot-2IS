@@ -379,8 +379,8 @@ with st.sidebar:
     # Enhanced stats display
     stats = rag_graph.vector_store.get_stats()
     st.metric(
-        label="📚 Knowledge Base", 
-        value=f"{stats.get('total_documents', 'N/A')} docs"
+        label="📚 Indexed Segments", 
+        value=f"{stats.get('total_documents', 'N/A')}"
     )
     
     # This part can be uncommented if you add syllabus stats back to vector_store.get_stats()
