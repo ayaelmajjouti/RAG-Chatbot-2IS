@@ -4,8 +4,7 @@ from dotenv import load_dotenv
 load_dotenv()
 class Config:
     # Target URL for the scraper
-    TARGET_URLS = ["https://miage.ut-capitole.fr/accueil/international/master-innovative-information-systems-2is", 
-                  "https://capitole.adv-pub.moveonfr.com/home-page-1578/"]
+    TARGET_URLS = ["https://miage.ut-capitole.fr/accueil/international/master-innovative-information-systems-2is","https://miage.ut-capitole.fr/accueil/international/etudier-a-letranger"]
     
     # Add your direct PDF links here. The scraper will download and process them.
     # Example: "https://example.com/path/to/document.pdf"
