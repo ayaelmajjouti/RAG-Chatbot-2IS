@@ -13,7 +13,9 @@ class OpenRouterRAG(BaseRAG):
         self.headers = {
             "Authorization": f"Bearer {config.OPENROUTER_API_KEY}",
             "Content-Type": "application/json",
-            "HTTP-Referer": config.TARGET_URLS, # Use your project's URL as the referrer
+            # The HTTP-Referer header must be a single string, not a list.
+            # We'll use the first URL from the config as the primary referrer.
+            "HTTP-Referer": config.TARGET_URLS[0] if config.TARGET_URLS else "",
             "X-Title": "2IS Masters RAG Assistant" # A descriptive title for your app
         }
     
