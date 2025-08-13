@@ -13,7 +13,7 @@ class OpenRouterRAG(BaseRAG):
         self.headers = {
             "Authorization": f"Bearer {config.OPENROUTER_API_KEY}",
             "Content-Type": "application/json",
-            "HTTP-Referer": config.TARGET_URL, # Use your project's URL as the referrer
+            "HTTP-Referer": config.TARGET_URLS, # Use your project's URL as the referrer
             "X-Title": "2IS Masters RAG Assistant" # A descriptive title for your app
         }
     
