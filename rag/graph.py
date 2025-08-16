@@ -387,14 +387,29 @@ User's off-topic question: "{question}" """
         question = state["question"]
         context = state["context"]
         history = state.get("history", []) 
-        # For the standard RAG path, we always use the general-purpose prompt.
-        # The specialist curriculum prompt is handled by the `find_and_list_courses` node.
-        answer = self.rag_model.query(
-            prompt=question, 
-            context=context, 
-            history=history, 
-            is_curriculum_question=False # This path is for non-curriculum list questions
-        )
+
+        # --- Enhanced Prompt for In-line Citations ---
+        # This prompt instructs the model to cite its sources, improving trustworthiness.
+        citation_prompt = f"""You are a helpful assistant for the 2IS Master's program. Answer the user's question based *only* on the provided context.
+
+After providing the answer, you MUST cite the sources you used. Under a "Citations" heading, list the exact `Source URL` for each piece of information.
+If the context does not contain the answer, state that you could not find the information.
+
+CONTEXT:
+{context}
+
+USER QUESTION: {question}
+
+Your Answer:
+"""
+
+        # The model is now queried with the more detailed prompt.
+        # We pass an empty context to the query method itself, as it's already included in the prompt.
+        raw_answer = self.rag_model.query(prompt=citation_prompt, context="", history=history)
+
+        # For now, we'll return the full answer including the citation block.
+        # A future improvement could be to parse this block out in the Streamlit app.
+        answer = raw_answer
         
         logger.info(f"Generated answer: {answer[:100]}...")
         return {**state, "answer": answer}
