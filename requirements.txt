@@ -6,6 +6,7 @@ faiss-cpu
 sentence-transformers
 beautifulsoup4
 pypdf
+PyMuPDF
 numpy
 langchain
 google-generativeai
