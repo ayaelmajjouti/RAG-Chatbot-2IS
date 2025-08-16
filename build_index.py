@@ -125,12 +125,8 @@ def build_knowledge_base(force_overwrite=False):
     try:
         # 1. Scrape website
         scraper = WebsiteScraper()
-        all_scraped_data = []
-        for url in config.TARGET_URLS:
-            logger.info(f"Scraping content from starting URL: {url}...")
-            print(f"Scraping content from starting URL: {url}...")
-            all_scraped_data.extend(scraper.scrape_website(url))
-        scraped_data = all_scraped_data
+        logger.info(f"Starting crawl from {len(config.TARGET_URLS)} seed URLs...")
+        scraped_data = scraper.scrape_website(config.TARGET_URLS)
         
         if not scraped_data:
             raise ValueError("No content was scraped from the website.")

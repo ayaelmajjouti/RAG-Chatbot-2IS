@@ -30,7 +30,7 @@ class Config:
     # OpenRouter API
     OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
     OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
-    OPENROUTER_MODEL = "deepseek/deepseek-r1-0528:free" # llm used for generation
+    OPENROUTER_MODEL = "google/gemma-7b-it:free" # Switched to a faster free model for generation
     
     # RAG settings
     SIMILARITY_THRESHOLD = 0.3  # Min similarity score for a chunk to be considered relevant

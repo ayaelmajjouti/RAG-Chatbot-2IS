@@ -8,6 +8,7 @@ from io import BytesIO
 import json
 from config import Config
 import os
+import time
 
 # Get a logger instance for this module. The configuration is handled by the main script.
 logger = logging.getLogger(__name__)
@@ -19,7 +20,42 @@ class WebsiteScraper:
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
             "Accept": "text/html,application/pdf,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
         })
+        self.visited_urls = set()
+        self.scraped_pages = 0
 
+    def is_same_domain(self, url, base_url):
+        """Check if URL is from the same domain as base URL"""
+        try:
+            return urlparse(url).netloc == urlparse(base_url).netloc
+        except:
+            return False
+    
+    def normalize_url(self, url):
+        """Normalize URL by removing fragments and trailing slashes"""
+        parsed = urlparse(url)
+        normalized = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+        if parsed.query:
+            normalized += f"?{parsed.query}"
+        return normalized.rstrip('/')
+
+    def extract_page_links(self, soup, base_url):
+        """Extract all valid links from the page for crawling"""
+        links = []
+        for link in soup.find_all('a', href=True):
+            href = link['href'].strip()
+            if not href or href.startswith('#'):
+                continue
+                
+            # Convert relative URLs to absolute
+            full_url = urljoin(base_url, href)
+            
+            # Only include links from the same domain
+            if self.is_same_domain(full_url, base_url):
+                normalized_url = self.normalize_url(full_url)
+                if normalized_url not in self.visited_urls:
+                    links.append(normalized_url)
+        
+        return links
     
     def load_json_data(self, json_file_path):
         """Load structured course data from the Syllabus.json file."""
@@ -39,25 +75,75 @@ class WebsiteScraper:
             logger.error(f"Error loading or parsing {json_file_path}: {str(e)}")
             return []
 
-    def scrape_website(self, url):
-        """Main method to scrape website content"""
-        logger.info(f"Starting scrape of {url}")
+    def scrape_website(self, start_urls: list):
+        """Main method to scrape website content with depth control"""
+        logger.info(f"Starting scrape from {len(start_urls)} seed URL(s).")
+        logger.info(f"Max depth: {Config.MAX_DEPTH}, Max pages: {Config.MAX_PAGES}")
+        
+        self.visited_urls.clear()
+        self.scraped_pages = 0
+        all_content = []
+        all_pdf_urls = set(Config.PDF_URLS) # Start with PDFs from config
         
         try:
-            main_content = self.scrape_page_content(url)
-            all_content = [main_content] if main_content else []
-
-        
-            # Find PDF links on the page and combine with the static list from config
-            found_pdf_links = self.find_pdf_links(url)
-            all_pdf_urls = set(found_pdf_links) | set(Config.PDF_URLS)
-            logger.info(f"Found {len(found_pdf_links)} PDF links on the page.")
-            logger.info(f"Processing a total of {len(all_pdf_urls)} unique PDF URLs (from page and config).")
+            # Initialize crawling with depth tracking
+            urls_to_visit = [(url, 0) for url in start_urls]  # (url, depth)
             
-            # --- JSON-First Strategy ---
+            # Crawl pages with depth control
+            while urls_to_visit and self.scraped_pages < Config.MAX_PAGES:
+                current_url, current_depth = urls_to_visit.pop(0)
+                
+                # Skip if already visited
+                if current_url in self.visited_urls:
+                    continue
+                    
+                # Skip if depth limit exceeded
+                if current_depth > Config.MAX_DEPTH:
+                    logger.info(f"Skipping {current_url} - depth {current_depth} exceeds limit {Config.MAX_DEPTH}")
+                    continue
+                
+                # Mark as visited
+                self.visited_urls.add(current_url)
+                
+                # Scrape the page
+                page_content, soup = self.scrape_page_content(current_url)
+                if page_content and soup:
+                    all_content.append(page_content)
+                    self.scraped_pages += 1
+                    logger.info(f"✅ Scraped page {self.scraped_pages}/{Config.MAX_PAGES} at depth {current_depth}: {current_url}")
+
+                    # Discover PDFs on this page and add them to the master set
+                    pdf_links_on_page = self.find_pdf_links(soup, current_url)
+                    all_pdf_urls.update(pdf_links_on_page)
+                    
+                    # Only extract links if we haven't reached max depth
+                    if current_depth < Config.MAX_DEPTH:
+                        try:                            
+                            # Extract links and add to queue with incremented depth
+                            links = self.extract_page_links(soup, current_url)
+                            for link in links:
+                                if link not in self.visited_urls:
+                                    urls_to_visit.append((link, current_depth + 1))
+                                    
+                            logger.info(f"Found {len(links)} new links at depth {current_depth}")
+                            
+                        except Exception as e:
+                            logger.error(f"Error extracting links from {current_url}: {str(e)}")
+                else:
+                    logger.warning(f"❌ Failed to scrape or content too short: {current_url}")
+                
+                # Rate limiting
+                time.sleep(1)
+                
+                # Progress update
+                if self.scraped_pages % 10 == 0:
+                    logger.info(f"Progress: {self.scraped_pages} pages scraped, {len(urls_to_visit)} URLs in queue")
+
+            logger.info(f"Processing a total of {len(all_pdf_urls)} unique PDF URLs discovered during crawl.")
+            
+            # --- JSON-First Strategy (keeping your exact logic) ---
             # 1. Process structured data from Syllabus.json
             syllabus_courses = self.load_json_data("Syllabus.json")
-            # Remplace la boucle for par :
             if syllabus_courses:
                 all_content.append({
                     'title': 'Syllabus Courses',
@@ -81,6 +167,7 @@ class WebsiteScraper:
             
             self._log_scraped_data_summary(all_content, all_pdf_urls)
             logger.info(f"Successfully prepared {len(all_content)} documents for processing")
+            logger.info(f"Crawling stats: {self.scraped_pages} pages scraped from {len(self.visited_urls)} visited URLs")
             return all_content
             
         except Exception as e:
@@ -128,9 +215,17 @@ class WebsiteScraper:
             response.raise_for_status()
             
             soup = BeautifulSoup(response.text, 'html.parser')
-            # here we remove script and style elements
-            for script in soup(["script", "style", "nav", "header", "footer"]):
+            # Remove common non-content elements to get cleaner text
+            for script in soup(["script", "style", "nav", "header", "footer", "aside", "form"]):
                 script.decompose()
+
+            # --- Improved Title Extraction ---
+            title = url.split('/')[-1] # Default title
+            if soup.title and soup.title.string:
+                title = " ".join(soup.title.string.strip().split())
+            elif soup.h1 and soup.h1.string:
+                # Fallback to the first H1 tag if title is missing or generic
+                title = " ".join(soup.h1.string.strip().split())
             
             # Get text content
             text = soup.get_text()
@@ -141,25 +236,21 @@ class WebsiteScraper:
             text = ' '.join(chunk for chunk in chunks if chunk)
             
             if len(text) < Config.MIN_CONTENT_LENGTH:
-                return None
+                return None, None # BUG FIX: Always return a tuple
                 
-            return {
-                'title': soup.title.string if soup.title else url.split('/')[-1],
+            return ({
+                'title': title,
                 'url': url,
                 'content': text
-            }
+            }, soup)
             
         except Exception as e:
             logger.error(f"Error scraping page {url}: {str(e)}")
-            return None
+            return None, None
 
-    def find_pdf_links(self, url):
+    def find_pdf_links(self, soup: BeautifulSoup, url: str):
         """Find all PDF links on the page"""
         try:
-            response = self.session.get(url, timeout=10)
-            response.raise_for_status()
-            
-            soup = BeautifulSoup(response.text, 'html.parser')
             pdf_links = set()
             
             # Look for all links ending with .pdf
@@ -228,5 +319,3 @@ class WebsiteScraper:
                 'error': str(e),
                 'status': 'failed'
             }
-
-    

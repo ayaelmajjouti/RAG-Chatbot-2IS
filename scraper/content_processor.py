@@ -101,6 +101,10 @@ class ContentProcessor:
             return []
 
         processed_docs = []
+        # --- BATCHING SETUP ---
+        regular_chunks_to_embed = []
+        regular_docs_for_later = []
+
         syllabus_count = 0
 
         for doc_idx, doc in enumerate(scraped_data):
@@ -142,31 +146,31 @@ class ContentProcessor:
                 chunks = self.text_splitter.split_text(clean_text)
                 title = doc.get('title', f'Document {doc_idx}')
 
-                for chunk_idx, chunk in enumerate(chunks):
-                    if not self.is_valid_chunk(chunk):
-                        continue
+                valid_chunks = [chunk for chunk in chunks if self.is_valid_chunk(chunk)]
+                regular_chunks_to_embed.extend(valid_chunks)
 
-                    try:
-                        embedding = self.embedding_model.encode(chunk)
-                        embedding = np.array(embedding, dtype='float32')
-                        
-                        processed_doc = {
-                            'title': str(title),
-                            'url': str(url),
-                            'content': chunk,
-                            'embedding': embedding.tolist(),
-                            'chunk_id': f"{url}-{chunk_idx}",
-                            'doc_index': doc_idx,
-                            'chunk_index': chunk_idx,
-                            'is_syllabus': False
-                        }
-                        processed_docs.append(processed_doc)
-                    except Exception as e:
-                        logger.error(f"Error processing chunk {chunk_idx}: {str(e)}")
+                for chunk_idx, chunk in enumerate(valid_chunks):
+                    regular_docs_for_later.append({
+                        'title': str(title),
+                        'url': str(url),
+                        'content': chunk,
+                        'chunk_id': f"{url}-{chunk_idx}",
+                        'doc_index': doc_idx,
+                        'chunk_index': chunk_idx,
+                        'is_syllabus': False
+                    })
 
             except Exception as e:
                 logger.error(f"Error processing document {doc_idx}: {str(e)}")
                 continue
+
+        # --- BATCH EMBEDDING STEP ---
+        if regular_chunks_to_embed:
+            logger.info(f"Embedding {len(regular_chunks_to_embed)} content chunks in a single batch...")
+            embeddings = self.embedding_model.encode(regular_chunks_to_embed, show_progress_bar=True)
+            for i, doc_template in enumerate(regular_docs_for_later):
+                doc_template['embedding'] = np.array(embeddings[i], dtype='float32').tolist()
+                processed_docs.append(doc_template)
 
         self._log_processed_data_summary(processed_docs, syllabus_count)
         return processed_docs
