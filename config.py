@@ -14,7 +14,7 @@ class Config:
     SYLLABUS_PDF_URL = next((url for url in PDF_URLS if "syllabus-book" in url), None)
 
     # Scraper settings
-    MAX_DEPTH = 3 # NOTE: Not currently implemented. Controls how many 'clicks' away from the start URL to scrape.
+    MAX_DEPTH = 5 # NOTE: Not currently implemented. Controls how many 'clicks' away from the start URL to scrape.
     MAX_PAGES = 80 # NOTE: Not currently implemented. A safety limit on the total number of pages to scrape.
     USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
     

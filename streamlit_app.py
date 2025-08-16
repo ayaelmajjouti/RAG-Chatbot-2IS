@@ -9,6 +9,7 @@ import json
 # Add project root to path to allow for clean imports when running with `streamlit run`
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from main import initialize_components
+from build_index import build_knowledge_base
 from config import config
 
 # --- Page Configuration ---
@@ -349,10 +350,20 @@ def load_rag_graph():
     Loads all the necessary components for the RAG system.
     Using @st.cache_resource ensures this heavy operation runs only once.
     """
+    # --- Self-Healing Knowledge Base ---
+    # Check if the vector database exists. If not, build it automatically.
+    # This is crucial for deployment on ephemeral filesystems like Streamlit Community Cloud.
+    if not os.path.exists(f"{config.VECTOR_DB_PATH}.index"):
+        st.warning("📚 Knowledge base not found. Building it for the first time. This may take a few minutes...")
+        # The `force_overwrite=True` flag ensures the script runs non-interactively.
+        build_knowledge_base(force_overwrite=True)
+        st.success("✅ Knowledge base built successfully! The app is now ready.")
+
     rag_graph = initialize_components()
     if rag_graph is None:
         st.error("❌ Failed to initialize the RAG system. Please check the logs.", icon="🚨")
         st.stop()
+        
     return rag_graph
 
 rag_graph = load_rag_graph()
