@@ -434,8 +434,11 @@ if not st.session_state.messages:
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
-        if "sources" in message and message["sources"]:
-            st.caption(f"📎 **Sources:** {', '.join(message['sources'])}")
+        # Handle new list-based source format for cleaner display
+        if message.get("sources"):
+            unique_sources = sorted(list(set(message['sources'])))
+            sources_markdown = "\n".join([f"- {s}" for s in unique_sources])
+            st.caption(f"📎 **Sources:**\n{sources_markdown}")
 
 # Accept user input with enhanced placeholder
 if prompt := st.chat_input("💬 Ask me anything about the 2IS Master's program..."):
@@ -475,8 +478,12 @@ if prompt := st.chat_input("💬 Ask me anything about the 2IS Master's program.
                         # Display the answer immediately
                         message_placeholder.markdown(full_response)
                         if sources:
-                            st.caption(f"📎 **Sources:** {', '.join(sources)}")
-                
+                            # De-duplicate and sort sources for cleaner presentation
+                            unique_sources = sorted(list(set(sources)))
+                            # Format as a markdown list
+                            sources_markdown = "\n".join([f"- {s}" for s in unique_sources])
+                            st.caption(f"📎 **Sources:**\n{sources_markdown}")
+
                 # If we have an answer, we can stop waiting. This improves the user experience
                 # by hiding the spinner as soon as the answer is displayed.
                 if full_response:
@@ -494,7 +501,9 @@ if prompt := st.chat_input("💬 Ask me anything about the 2IS Master's program.
 
     # Add assistant response to chat history
     if full_response:
-        assistant_message = {"role": "assistant", "content": full_response, "sources": sources}
+        # Ensure we save the unique, sorted list of sources to the history as well
+        unique_sources_for_history = sorted(list(set(sources))) if sources else []
+        assistant_message = {"role": "assistant", "content": full_response, "sources": unique_sources_for_history}
         st.session_state.messages.append(assistant_message)
         # Save the updated history to the file
         save_history(session_id, st.session_state.messages)

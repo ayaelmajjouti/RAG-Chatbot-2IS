@@ -4,7 +4,11 @@ from dotenv import load_dotenv
 load_dotenv()
 class Config:
     # Target URL for the scraper
-    TARGET_URLS = ["https://miage.ut-capitole.fr/accueil/international/master-innovative-information-systems-2is","https://miage.ut-capitole.fr/accueil/international/etudier-a-letranger"]
+    TARGET_URLS = [
+        "https://miage.ut-capitole.fr/accueil/international/master-innovative-information-systems-2is",
+        "https://miage.ut-capitole.fr/accueil/international/etudier-a-letranger",
+        "https://www.ut-capitole.fr/accueil/international" # Added the main international page to ensure its content is included
+    ]
     
     # Add your direct PDF links here. The scraper will download and process them.
     # Example: "https://example.com/path/to/document.pdf"
@@ -14,8 +18,8 @@ class Config:
     SYLLABUS_PDF_URL = next((url for url in PDF_URLS if "syllabus-book" in url), None)
 
     # Scraper settings
-    MAX_DEPTH = 5 # NOTE: Not currently implemented. Controls how many 'clicks' away from the start URL to scrape.
-    MAX_PAGES = 80 # NOTE: Not currently implemented. A safety limit on the total number of pages to scrape.
+    MAX_DEPTH = 5 # NOTE: it is implemented. Controls how many 'clicks' away from the start URL to scrape.
+    MAX_PAGES = 80 # NOTE: it is implemented. A safety limit on the total number of pages to scrape.
     USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
     
     # Processing settings
