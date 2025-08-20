@@ -157,122 +157,77 @@ User's off-topic question: "{question}" """
         A specialized "super-node" that handles requests to list all courses for a given period.
         It retrieves all syllabus data, filters it in Python, and then generates a tailored response.
         """
-        logger.info("---NODE: FIND AND LIST COURSES (SPECIALIST)---")
+        logger.info("---NODE: FIND AND LIST COURSES (Specialist Path)---")
         user_question = state.get("standalone_question") or state["question"]
         
-        # --- IMPROVED EXTRACTION STEP with better period normalization ---
+        # Step 1: Use LLM to extract structured parameters (period, details)
         extraction_prompt = f"""You are an expert query parser. Your task is to analyze the user's question and extract two pieces of information: the 'period' and the 'details' they are asking for.
 
-    1.  **period**: Normalize the academic period to one of these formats: "year 1", "year 2", "year 1, semester 1", "year 1, semester 2". If no period is mentioned, use "all".
-    2.  **details**: Identify the specific fields the user wants. The available fields are: `course_title`, `teachers`, `period`, `ects`, `contact_hours`, `prerequisites`, `course_description`.
+1.  **period**: Normalize the academic period to one of these formats: "year 1, semester 1", "year 1, semester 2", "year 1", "year 2", "all". If no specific period is mentioned but the question implies all courses, use "all".
 
-    Examples:
-    - User question: "list the courses in the first year"
-    -> {{"period": "year 1", "details": ["course_title"]}}
-    - User question: "who are the teachers for M1S2?"
-    -> {{"period": "year 1, semester 2", "details": ["course_title", "teachers"]}}
-    - User question: "give me the ECTS for all courses"
-    -> {{"period": "all", "details": ["course_title", "ects"]}}
+2.  **details**: Identify the specific fields the user wants from the available list. The available fields are: `course_title`, `teachers`, `period`, `ects`, `contact_hours`, `prerequisites`, `course_description`. Always include `course_title`.
 
-    User Question: "{user_question}"
+Examples:
+- User question: "list the courses in the first year" -> {{"period": "year 1", "details": ["course_title"]}}
+- User question: "who are the teachers for M1S2?" -> {{"period": "year 1, semester 2", "details": ["course_title", "teachers"]}}
+- User question: "give me the ECTS for all courses" -> {{"period": "all", "details": ["course_title", "ects"]}}
 
-    Respond with ONLY a valid JSON object in the following format:
-    {{
-    "period": "...",
-    "details": ["..."]
-    }}"""
+User Question: "{user_question}"
+
+Respond with ONLY a valid JSON object in the following format:
+{{
+   "period": "...",
+   "details": ["..."]
+}}"""
         
         try:
             response_str = self.rag_model.query(prompt=extraction_prompt)
             json_match = re.search(r'\{.*\}', response_str, re.DOTALL)
-            extraction_json = json.loads(json_match.group(0))
-            target_period = extraction_json.get("period", "all").lower().strip()
-            desired_details = extraction_json.get("details", ["course_title"])
-            print(f"DEBUG: Extracted period: '{target_period}', details: {desired_details}")
+            if not json_match:
+                raise json.JSONDecodeError("No JSON object found in extraction response", response_str, 0)
+            params = json.loads(json_match.group(0))
+            target_period = params.get("period", "all").lower().strip()
+            desired_details = params.get("details", ["course_title"])
             logger.info(f"Extracted period: '{target_period}', details: {desired_details}")
-        except (json.JSONDecodeError, AttributeError, KeyError) as e:
-            logger.error(f"Failed to parse extraction from LLM: {e}. Defaulting to broad search.")
-            target_period = "all"
-            desired_details = ["course_title", "teachers", "ects"]
+        except (json.JSONDecodeError, KeyError) as e:
+            logger.error(f"Failed to parse extraction from LLM: {e}. Providing a fallback response.")
+            answer = "I had trouble understanding the specifics of your request for a course list. Could you please try rephrasing it?"
+            return {**state, "answer": answer, "sources": []}
 
-        # Step 2: Retrieve ALL syllabus documents.
-        initial_query = "[SYLLABUS_COURSE_DATA]"
-        query_embedding = self.processor.encode_query(initial_query)
-        documents = self.vector_store.similarity_search(query_embedding, k=100)
-        
-        # DEBUG: Check how many documents we retrieved
-        print(f"DEBUG: Retrieved {len(documents)} documents from vector store")
-        
-        # Step 3: Programmatically parse and filter the structured data
-        structured_course_data = []
-        syllabus_docs_found = 0
-        
-        for doc in documents:
-            doc_content = doc['document']['content']
-            if "[SYLLABUS_COURSE_DATA]" not in doc_content:
-                continue
-            
-            syllabus_docs_found += 1
-            print(f"DEBUG: Found syllabus document #{syllabus_docs_found}")
-            
-            try:
-                # --- EFFICIENT FILTERING USING METADATA ---
-                # Get the pre-saved metadata for quick filtering.
-                course_metadata = doc['document'].get('metadata', {})
-                course_period = course_metadata.get("period", "").lower().strip()
-                course_title_from_meta = doc['document'].get('title', 'Unknown')
-                
-                # DEBUG: Print what's in your actual data
-                print(f"DEBUG: Course: {course_title_from_meta} - Period from metadata: '{course_period}'")
-                
-                # --- SIMPLIFIED FILTERING LOGIC ---
-                period_matches = False
-                if target_period == 'all':
-                    period_matches = True
-                else:
-                    # Since you're right that the LLM should be smart enough, let's use simpler logic
-                    # Just check if the target period words appear in the course period
-                    if target_period == "year 1":
-                        period_matches = ("year 1" in course_period or "y1" in course_period or 
-                                        "m1" in course_period or "master 1" in course_period or
-                                        "first year" in course_period)
-                    elif target_period == "year 2":
-                        period_matches = ("year 2" in course_period or "y2" in course_period or 
-                                        "m2" in course_period or "master 2" in course_period or
-                                        "second year" in course_period)
-                    else:
-                        # For more specific periods, just check if all words are present
-                        target_words = target_period.replace(",", "").split()
-                        period_matches = all(word in course_period for word in target_words)
+        # Step 2: Retrieve ALL syllabus data directly from the source JSON for 100% accuracy.
+        try:
+            with open('Syllabus.json', 'r', encoding='utf-8') as f:
+                all_syllabus_courses = json.load(f)
+            logger.info(f"Successfully loaded {len(all_syllabus_courses)} courses from Syllabus.json")
+        except FileNotFoundError:
+            logger.error("Syllabus.json not found. Cannot perform specialist list search.")
+            return {**state, "answer": "I can't access the detailed course syllabus right now to create a list.", "sources": ["Syllabus.json"]}
 
-                print(f"DEBUG: Period match for '{course_title_from_meta}': {period_matches}")
-
-                if period_matches:
-                    # Now that we know it matches, parse the full JSON to get all details
-                    json_part = doc_content.split('] ', 1)[1]
-                    course_json = json.loads(json_part)
-                    # Extract only the details the user asked for
-                    extracted_info = {key: course_json.get(key, "N/A") for key in desired_details}
-                    structured_course_data.append(extracted_info)
-                    print(f"DEBUG: Added course: {course_json.get('course_title', 'Unknown')}")
-                
-            except (json.JSONDecodeError, IndexError) as e:
-                logger.warning(f"Could not parse JSON for a syllabus chunk: {e}")
-                continue
-
-        # DEBUG: Summary of what we found
-        print(f"DEBUG: Found {syllabus_docs_found} syllabus documents total")
-        print(f"DEBUG: Found {len(structured_course_data)} courses matching '{target_period}'")
-        logger.info(f"Found {len(structured_course_data)} courses matching '{target_period}'")
+        # Step 3: Filter the courses algorithmically in Python for guaranteed completeness.
+        matching_courses = []
+        for course in all_syllabus_courses:
+            course_period = course.get("period", "").lower().strip()
+            if target_period == "all" or target_period in course_period:
+                matching_courses.append(course)
         
-        # If we found syllabus docs, use them as the primary source.
-        if structured_course_data:
-            context = json.dumps(structured_course_data, indent=2)
+        logger.info(f"Found {len(matching_courses)} courses matching period '{target_period}'.")
+
+        if not matching_courses:
+            answer = f"I couldn't find any courses for the period '{target_period}'. Please check the year or semester and try again."
+            return {**state, "answer": answer, "sources": ["Syllabus.json"]}
+
+        # Step 4: Format the context for the final presentation by the LLM.
+        # We extract only the desired details to keep the context clean and focused.
+        context_for_llm_list = []
+        for course in sorted(matching_courses, key=lambda x: x.get('course_title', '')):
+            course_details = {key: course.get(key, "Not specified") for key in desired_details}
+            context_for_llm_list.append(course_details)
+
+        if context_for_llm_list:
+            context = json.dumps(context_for_llm_list, indent=2)
             sources = ["local_json://Syllabus.json"]
-            print(f"DEBUG: Using structured course data with {len(structured_course_data)} courses")
         else:
             # Fallback logic
-            print(f"DEBUG: No matching courses found, falling back to general search")
             logger.warning(f"No syllabus entries found for '{target_period}'. Falling back to general document search.")
             flyer_docs = self.vector_store.similarity_search(self.processor.encode_query(user_question), k=5)
             context, sources = self.rag_model.format_context_with_sources(flyer_docs)
@@ -280,24 +235,14 @@ User's off-topic question: "{question}" """
                 answer = f"I'm sorry, I couldn't find any courses listed for '{target_period}' in any of the available program documents."
                 return {**state, "answer": answer, "sources": []}
 
-        # Step 4: Generate the final answer
-        final_prompt = f"""You are an expert academic advisor. A student has asked:
-    "{user_question}"
-
-    Based *only* on the structured JSON data below, provide a clear and direct answer.
-    - Present the information in a user-friendly list or table format.
-    - Include all courses found in the data for the requested period.
-    - Do not mention that you are using a "context". Just answer the question naturally.
-    - Do not add limiting notes unless there are genuinely very few results.
-
-    CONTEXT:
-    {context}
-    """
+        # Step 5: Generate the final answer using the correct RAG pattern.
+        # We pass the user's question and the structured context separately.
+        # The RAG model's query method will construct the final prompt.
         
         history = state.get("history", [])
         final_answer = self.rag_model.query(
-            prompt=final_prompt,
-            context="",
+            prompt=user_question,
+            context=context,
             history=history,
             is_curriculum_question=True
         )

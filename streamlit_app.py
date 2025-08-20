@@ -385,8 +385,8 @@ with st.sidebar:
     
     if stats.get('syllabus_documents'):
         st.metric(
-            label="📋 Syllabus Courses", 
-            value=f"{stats.get('syllabus_documents', 0)} courses"
+            label="📋 Indexed Courses",
+            value=f"{stats.get('syllabus_documents', 0)} entries"
         )
     
     st.caption(f"🤖 **Model:** `{config.OPENROUTER_MODEL}`")
@@ -460,12 +460,15 @@ if prompt := st.chat_input("💬 Ask me anything about the 2IS Master's program.
                         full_response = answer
                         sources = node_output.get("sources", [])
                         # Display the answer immediately
-                        message_placeholder.markdown(full_response)
+                        message_placeholder.markdown(full_response + "▌")
                         if sources:
                             st.caption(f"📎 **Sources:** {', '.join(sources)}")
+                        # Once we have an answer, we can stop the spinner and let evaluation happen in the background
+                        break
                 
-        # so we don't need to handle the `evaluate_answer` node here anymore.
-        # This simplifies the code and speeds up the user experience.
+        # Clean up the cursor from the streaming-like effect
+        if full_response:
+            message_placeholder.markdown(full_response)
         
         # If no response was generated at all, show a fallback message.
         if not full_response:

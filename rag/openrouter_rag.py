@@ -119,7 +119,7 @@ CONTEXT:
 {context}"""
             else:
                 # This is the general prompt for all other RAG questions
-                system_prompt_content = f"""You are a specialized assistant for the 2IS Master's program. Answer the user's question based *only* on the provided context. If the context does not contain the information to answer the question, state that you could not find the information in the knowledge base. Do not use any external knowledge.\n\nCONTEXT:\n{context}"""
+                system_prompt_content = f"""You are a specialized assistant for the 2IS Master's program. Answer the user's question based *only* on the provided context. Synthesize the information from all provided sources in the context to give a comprehensive and detailed answer. If the context does not contain the information to answer the question, state that you could not find the information in the knowledge base. Do not use any external knowledge.\n\nCONTEXT:\n{context}"""
 
             messages.append({"role": "system", "content": system_prompt_content})
 
@@ -135,7 +135,7 @@ CONTEXT:
                     "model": config.OPENROUTER_MODEL, 
                     "messages": messages, 
                     "temperature": 0.7, 
-                    "max_tokens": 2048 
+                    "max_tokens": 8192 
                 }, 
                 timeout=30
             )
