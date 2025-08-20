@@ -1,25 +1,8 @@
 import os
 from dotenv import load_dotenv
 
-# Try to import streamlit to check for secrets, but handle the case where it's not installed
-# or we are not in a streamlit environment.
-try:
-    import streamlit as st
-    _is_streamlit_env = True
-except (ImportError, ModuleNotFoundError):
-    _is_streamlit_env = False
 
 load_dotenv()
-
-def get_secret(key: str) -> str:
-    """
-    Retrieves a secret key. It first tries Streamlit's secrets manager,
-    then falls back to environment variables. This allows the app to work
-    both locally (with a .env file) and when deployed on Streamlit Cloud.
-    """
-    if _is_streamlit_env and hasattr(st, 'secrets') and key in st.secrets:
-        return st.secrets[key]
-    return os.getenv(key)
 
 class Config:
     # Target URL for the scraper
@@ -47,7 +30,7 @@ class Config:
     VECTOR_DB_PATH = "vector_db/website_index" #file path to save the knowledge base
     
     # OpenRouter API
-    OPENROUTER_API_KEY = get_secret("OPENROUTER_API_KEY")
+    OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
     OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
     OPENROUTER_MODEL = "deepseek/deepseek-r1-0528:free" # llm used for generation
     
@@ -56,6 +39,6 @@ class Config:
     MAX_CONTEXT_LENGTH = 16000 # Max characters to send to the llm to prevent overly large/expensive API calls
 
     # Web Search for CRAG (Corrective-RAG)
-    TAVILY_API_KEY = get_secret("TAVILY_API_KEY") # Example for Tavily Search API
+    TAVILY_API_KEY = os.getenv("TAVILY_API_KEY") # Example for Tavily Search API
 
 config = Config()

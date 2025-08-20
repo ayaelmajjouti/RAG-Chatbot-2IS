@@ -163,20 +163,20 @@ User's off-topic question: "{question}" """
         # Step 1: Use LLM to extract structured parameters (period, details)
         extraction_prompt = f"""You are an expert query parser. Your task is to analyze the user's question and extract two pieces of information: the 'period' and the 'details' they are asking for.
 
-1.  **period**: Normalize the academic period to one of these formats: "year 1, semester 1", "year 1, semester 2", "year 1", "year 2", "all". If no specific period is mentioned but the question implies all courses, use "all".
+1.  **periods**: Normalize the academic period(s) into a list of one or more of these formats: "year 1, semester 1", "year 1, semester 2", "year 1", "year 2", "all". If the user asks for S1 and S2, you can use ["year 1"].
 
 2.  **details**: Identify the specific fields the user wants from the available list. The available fields are: `course_title`, `teachers`, `period`, `ects`, `contact_hours`, `prerequisites`, `course_description`. Always include `course_title`.
 
 Examples:
-- User question: "list the courses in the first year" -> {{"period": "year 1", "details": ["course_title"]}}
-- User question: "who are the teachers for M1S2?" -> {{"period": "year 1, semester 2", "details": ["course_title", "teachers"]}}
-- User question: "give me the ECTS for all courses" -> {{"period": "all", "details": ["course_title", "ects"]}}
+- User question: "list the courses in the first year" -> {{"periods": ["year 1"], "details": ["course_title"]}}
+- User question: "who are the teachers for M1S2?" -> {{"periods": ["year 1, semester 2"], "details": ["course_title", "teachers"]}}
+- User question: "give me the ECTS for all courses" -> {{"periods": ["all"], "details": ["course_title", "ects"]}}
 
 User Question: "{user_question}"
 
 Respond with ONLY a valid JSON object in the following format:
 {{
-   "period": "...",
+   "periods": ["..."],
    "details": ["..."]
 }}"""
         
@@ -186,9 +186,9 @@ Respond with ONLY a valid JSON object in the following format:
             if not json_match:
                 raise json.JSONDecodeError("No JSON object found in extraction response", response_str, 0)
             params = json.loads(json_match.group(0))
-            target_period = params.get("period", "all").lower().strip()
+            target_periods = params.get("periods", ["all"])
             desired_details = params.get("details", ["course_title"])
-            logger.info(f"Extracted period: '{target_period}', details: {desired_details}")
+            logger.info(f"Extracted periods: '{target_periods}', details: {desired_details}")
         except (json.JSONDecodeError, KeyError) as e:
             logger.error(f"Failed to parse extraction from LLM: {e}. Providing a fallback response.")
             answer = "I had trouble understanding the specifics of your request for a course list. Could you please try rephrasing it?"
@@ -207,13 +207,16 @@ Respond with ONLY a valid JSON object in the following format:
         matching_courses = []
         for course in all_syllabus_courses:
             course_period = course.get("period", "").lower().strip()
-            if target_period == "all" or target_period in course_period:
-                matching_courses.append(course)
+            # Check if the course period matches any of the target periods
+            for target_period in target_periods:
+                if target_period == "all" or target_period.lower().strip() in course_period:
+                    matching_courses.append(course)
+                    break # Avoid adding the same course multiple times
         
-        logger.info(f"Found {len(matching_courses)} courses matching period '{target_period}'.")
+        logger.info(f"Found {len(matching_courses)} courses matching periods '{target_periods}'.")
 
         if not matching_courses:
-            answer = f"I couldn't find any courses for the period '{target_period}'. Please check the year or semester and try again."
+            answer = f"I couldn't find any courses for the period(s) '{', '.join(target_periods)}'. Please check the year or semester and try again."
             return {**state, "answer": answer, "sources": ["Syllabus.json"]}
 
         # Step 4: Format the context for the final presentation by the LLM.
@@ -228,11 +231,11 @@ Respond with ONLY a valid JSON object in the following format:
             sources = ["local_json://Syllabus.json"]
         else:
             # Fallback logic
-            logger.warning(f"No syllabus entries found for '{target_period}'. Falling back to general document search.")
+            logger.warning(f"No syllabus entries found for '{target_periods}'. Falling back to general document search.")
             flyer_docs = self.vector_store.similarity_search(self.processor.encode_query(user_question), k=5)
             context, sources = self.rag_model.format_context_with_sources(flyer_docs)
             if not context:
-                answer = f"I'm sorry, I couldn't find any courses listed for '{target_period}' in any of the available program documents."
+                answer = f"I'm sorry, I couldn't find any courses listed for '{', '.join(target_periods)}' in any of the available program documents."
                 return {**state, "answer": answer, "sources": []}
 
         # Step 5: Generate the final answer using the correct RAG pattern.
