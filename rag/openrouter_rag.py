@@ -155,7 +155,9 @@ CONTEXT:
                     return "API Error: Unauthorized. Please check your API key."
                 if e.response.status_code == 402:
                     return "API Error: Payment Required. Please check your OpenRouter account credits."
-            return f"Error: A network problem occurred while connecting to the API."
+            # This block is hit for connection timeouts, DNS errors, etc.
+            # A common cause in deployed apps is a missing API key secret or firewall rules.
+            return "Error: A network problem occurred while connecting to the API. This can happen if the API key is missing in the deployment environment or if there are network restrictions."
         except json.JSONDecodeError:
             logger.error(f"Failed to decode JSON response from OpenRouter. Response text: {response.text}")
             return "Error: Could not understand the response from the API."
