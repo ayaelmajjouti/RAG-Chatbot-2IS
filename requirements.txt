@@ -7,5 +7,3 @@ sentence-transformers
 beautifulsoup4
 pypdf
 numpy 
-scikit-learn
-matplotlib
