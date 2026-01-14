@@ -5,10 +5,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class Config:
-    # Target URL for the scraper
     TARGET_URL = "https://miage.ut-capitole.fr/accueil/international/master-innovative-information-systems-2is"
     
-    # Add your direct PDF links here. The scraper will download and process them.
     # Example: "https://example.com/path/to/document.pdf"
     PDF_URLS = ["https://miage.ut-capitole.fr/medias/fichier/final-new-2024-flyer-master-2is_1729089997241-pdf?ID_FICHE=573467&INLINE=FALSE","https://miage.ut-capitole.fr/medias/fichier/syllabus-book-2024-25_1738767357979-pdf?ID_FICHE=573467&INLINE=FALSE","https://miage.ut-capitole.fr/medias/fichier/final-en-24-25-livret-accueil-etudiant_1730728450007-pdf?ID_FICHE=573467&INLINE=FALSE"]
 
