@@ -3,7 +3,6 @@ import os
 from dotenv import load_dotenv
 import sys
 
-# Add project root to path to allow for clean imports
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # --- Project Imports ---
