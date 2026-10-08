@@ -5,7 +5,7 @@ import json
 import numpy as np
 from sentence_transformers import SentenceTransformer
 from config import config
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 import logging
 
 logger = logging.getLogger(__name__)
