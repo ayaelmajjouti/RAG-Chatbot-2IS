@@ -8,3 +8,4 @@ beautifulsoup4
 pypdf
 numpy 
 langchain
+langchain-text-splitters
