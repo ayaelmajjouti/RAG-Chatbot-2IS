@@ -30,7 +30,7 @@ class Config:
     # OpenRouter API
     OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
     OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
-    OPENROUTER_MODEL = "thinkingmachines/inkling-small:free" # llm used for generation
+    OPENROUTER_MODEL = "nvidia/nemotron-3-super-120b-a12b:free" # llm used for generation
     
     # RAG settings
     SIMILARITY_THRESHOLD = 0.3  # Min similarity score for a chunk to be considered relevant
