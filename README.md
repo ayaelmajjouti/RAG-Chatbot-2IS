@@ -6,7 +6,6 @@ A conversational assistant for the **Master "Innovative Information Systems" (2I
 
 👉 **Live demo:** https://rag-chatbot-2is-qcthvwdzoerdnj4xappyfjd.streamlit.app/
 
-<!-- TODO: add a screenshot of the interface, e.g. ![Interface](docs/interface.png) -->
 
 ---
 
@@ -39,7 +38,6 @@ A conversational assistant for the **Master "Innovative Information Systems" (2I
 3. **Generate**: the LLM writes a natural answer from the retrieved context only.
 4. **Display**: answer plus sources in the Streamlit interface.
 
-<!-- TODO: add the architecture diagram (Figure 4.4 of the report), e.g. ![Architecture](docs/architecture.png) -->
 
 ---
 
