@@ -1,153 +1,161 @@
-#  2IS Master's Program Assistant (RAG Chatbot)
+# 🎓 2IS Master's Program Assistant
 
-A conversational assistant for the **Master "Innovative Information Systems" (2IS)** at **Université Toulouse Capitole**. It answers questions about admissions, courses, teachers, ECTS, prerequisites and career prospects, using only official program documents.
+A chatbot that answers students' questions about the **Master "Innovative Information Systems" (2IS)** at **Université Toulouse Capitole**: admissions, courses, teachers, ECTS, prerequisites, career prospects.
 
-> Internship project (Licence 3 MIAGE, 2024-2025) carried out at **IRIT**, supervised by Prof. Chihab Hanachi.
+It answers **only from official program documents**, and shows its sources under every answer.
 
-👉 **Live demo:** https://rag-chatbot-2is-qcthvwdzoerdnj4xappyfjd.streamlit.app/
+👉 **Try it:** https://rag-chatbot-2is-qcthvwdzoerdnj4xappyfjd.streamlit.app/
 
+> Internship project (Licence 3 MIAGE, 2024-2025) at **IRIT**, supervised by Prof. Chihab Hanachi.
 
----
-
-## Features
-
-- **Hybrid RAG**: semantic search (FAISS) for open questions + deterministic Python filtering for exhaustive list questions ("list all courses of semester 1").
-- **Adaptive routing** with LangGraph. Each question is classified and sent down the right path:
-  1. Simple conversation (greetings, thanks)
-  2. Polite refusal for off-topic questions
-  3. Specialized list handling (`find_and_list_courses`)
-  4. Standard RAG pipeline
-- **Conversation memory**: follow-up questions ("And who teaches it?") are rewritten into standalone questions.
-- **Anti-hallucination**: strict prompting ("answer ONLY with the provided information") and cited sources under every answer.
-- **Automatic evaluation** (LLM-as-a-Judge): classification accuracy, response time, faithfulness, relevancy, reference-based score.
-- **Auto-updated knowledge base** via a scheduled scraping task.
-
----
-
-##  Architecture
-
-### Phase 1: Building the knowledge base
-1. **Collection**: website scraping (up to 5 levels deep), PDF documents (brochures, booklets), and a structured `syllabus.json`.
-2. **Processing**: long texts are cleaned and split into chunks; each syllabus course stays a complete entity (never fragmented).
-3. **Embedding**: chunks are converted to 384-dimensional vectors with `sentence-transformers/all-MiniLM-L6-v2`.
-4. **Indexing**: vectors are stored in a **FAISS** index for fast similarity search.
-
-### Phase 2: Answering a question
-1. **Analyze query**: classification, question rewriting, list detection.
-2. **Retrieve**: FAISS semantic search, or exhaustive syllabus filtering for list requests.
-3. **Generate**: the LLM writes a natural answer from the retrieved context only.
-4. **Display**: answer plus sources in the Streamlit interface.
+<img width="1454" height="872" alt="image" src="https://github.com/user-attachments/assets/9006ca27-ed37-4133-9c2e-d6f94b411034" />
 
 
 ---
 
-##  Tech Stack
+## Why this project?
 
-| Component | Technology |
+Every year, the 2IS master receives many international students who ask the same questions again and again. This assistant answers them instantly, any time, in plain language.
+
+## What it can do
+
+- **Answer questions about the program**, using the official website, PDF brochures and the syllabus.
+- **List things exactly**: for questions like "list all courses of semester 1", it filters the syllabus with code instead of guessing, so nothing is forgotten.
+- **Follow a conversation**: "And who teaches it?" is understood from the previous messages.
+- **Stay on topic**: greetings get a friendly reply, and off-topic questions get a polite refusal.
+- **Avoid making things up**: the model is told to answer only with the retrieved information, and it shows its sources.
+
+## How it works
+
+The idea is called **RAG** (Retrieval-Augmented Generation): instead of letting the AI answer from memory, we first **find** the relevant passages, then ask the AI to **write the answer from them only**.
+
+**Step 1: Build the knowledge base** (`build_index.py`)
+1. Collect the website pages, PDFs and the syllabus (`Syllabus.json`).
+2. Cut long texts into small chunks (each course in the syllabus is kept whole).
+3. Turn each chunk into numbers (an *embedding*) with `all-MiniLM-L6-v2`.
+4. Store them in a **FAISS** index (`vector_db/`) for fast search.
+
+**Step 2: Answer a question** (`streamlit_app.py`)
+1. Understand the question: chat, off-topic, list request, or normal question. Rewrite it if it depends on earlier messages.
+2. Find the best matching chunks (or filter the syllabus for lists).
+3. Ask the AI to write the answer using only those chunks.
+4. Show the answer with its sources.
+
+The flow between these steps is managed with **LangGraph**.
+
+## Built with
+
+| What | Tool |
 |---|---|
-| Orchestration | LangGraph |
-| LLM | DeepSeek-R1 (`deepseek/deepseek-r1-0528:free`) via API |
-| Embeddings | `sentence-transformers/all-MiniLM-L6-v2` |
-| Vector search | FAISS |
+| Flow of the conversation | LangGraph |
+| AI model | A free model via [OpenRouter](https://openrouter.ai) (set in `config.py`) |
+| Understanding text | `sentence-transformers/all-MiniLM-L6-v2` |
+| Search | FAISS |
+| Chat history | Upstash Redis |
 | Interface | Streamlit |
-| Deployment | GitHub + Streamlit Community Cloud |
-| Language | Python |
+| Hosting | GitHub + Streamlit Community Cloud |
 
 ---
 
-##  Getting Started
+## Run it yourself
 
-### Prerequisites
-- Python 3.10+
-- An API key for the LLM provider <!-- TODO: name the provider you use (e.g. OpenRouter) -->
-
-### Installation
-
+### 1. Get the code
 ```bash
-git clone https://github.com/<your-username>/<your-repo>.git
-cd <your-repo>
-pip install -r requirements.txt
+git clone https://github.com/ayaelmajjouti/RAG-Chatbot-2IS.git
+cd RAG-Chatbot-2IS
 ```
 
-### Configuration
-
-Create a `.env` file (or Streamlit secrets) with your API key:
-
+### 2. Install
+Python **3.11 or 3.12** is recommended.
+```bash
+python -m venv venv
+venv\Scripts\activate        # Windows  (Mac/Linux: source venv/bin/activate)
+python -m pip install -r requirements.txt
 ```
-API_KEY=your_key_here
+
+### 3. Add your secrets
+The app needs three values. **Never write them in the code or commit them.**
+
+| Name | Where to get it |
+|---|---|
+| `OPENROUTER_API_KEY` | openrouter.ai → API Keys |
+| `UPSTASH_REDIS_REST_URL` | console.upstash.com → your database → REST API |
+| `UPSTASH_REDIS_REST_TOKEN` | same place |
+
+**Locally**, set them as environment variables. For example in PowerShell:
+```powershell
+$env:OPENROUTER_API_KEY="your_key"
+$env:UPSTASH_REDIS_REST_URL="your_url"
+$env:UPSTASH_REDIS_REST_TOKEN="your_token"
 ```
 
-> ⚠️ Never commit your API key. Add `.env` to your `.gitignore`.
+**On Streamlit Cloud**, open your app → ⋮ → **Settings → Secrets** and paste:
+```toml
+OPENROUTER_API_KEY = "your_key"
+UPSTASH_REDIS_REST_URL = "your_url"
+UPSTASH_REDIS_REST_TOKEN = "your_token"
+```
 
-### Build the knowledge base
-
+### 4. Build the knowledge base
 ```bash
 python build_index.py
 ```
 
-This scrapes the website, processes the PDFs and `syllabus.json`, creates the chunks and builds the FAISS index.
-
-### Run the app
-
+### 5. Start the app
 ```bash
-streamlit run app.py
+streamlit run streamlit_app.py
 ```
-
-<!-- TODO: replace app.py with the real name of your Streamlit file -->
+It opens at http://localhost:8501.
 
 ---
 
-##  Project Structure
+## Project files
 
-<!-- TODO: adjust to match your real repository -->
 ```
 .
-├── app.py              # Streamlit interface + LangGraph agent
-├── build_index.py      # Scraping, chunking, embeddings, FAISS index
-├── syllabus.json       # Structured course data
-├── requirements.txt
-└── README.md
+├── streamlit_app.py     # The web interface
+├── main.py              # Main program
+├── base_rag.py          # RAG logic
+├── config.py            # Settings (model name, secrets read from environment)
+├── build_index.py       # Builds the knowledge base and FAISS index
+├── evaluate.py          # Automatic tests of the chatbot
+├── Syllabus.json        # Course data
+├── scraped_content.json # Content collected from the website
+├── rag/                 # RAG components
+├── scraper/             # Website scraping
+├── vector_db/           # FAISS index (needed by the app)
+└── requirements.txt     # Python packages
 ```
 
----
+## Keeping it up to date
 
-## 🔄 Updating the Data
+The website changes, so the knowledge base is rebuilt every 4 months (January, April, July, October) by a scheduled task that runs `build_index.py`.
 
-The knowledge base is rebuilt automatically every 4 months (January, April, July, October) by a scheduled task running `build_index.py`. To update manually:
+To update by hand: edit `Syllabus.json` or add PDFs, run `python build_index.py`, then push to GitHub. Streamlit redeploys automatically.
 
-1. Add new PDFs and/or edit `syllabus.json`
-2. Run `python build_index.py`
-3. Push to GitHub, which triggers an automatic redeploy on Streamlit
+## How it was tested
 
----
+- **Automatic tests** on five types of questions: about courses, lists, greetings, off-topic, and trick questions with no answer in the documents. They check the routing, the response time, and the quality of the answers.
+- **Real users**: fellow students tried the deployed app and gave feedback.
 
-##  Evaluation
+## Known limits
 
-- **Automated tests** on 5 question types: course questions, list questions, greetings, off-topic questions, and trap questions (no answer in the documents).
-- **User validation** with fellow students through the deployed app.
+- It only knows what is in its documents: no timetables, conferences, or private spaces (ENT, Moodle).
+- For urgent or personal administrative questions, contact the school office.
+- It uses a free AI model, so it can be slow, or show a "too many requests" error. Wait a moment and retry.
 
----
+## Ideas for the future
 
-## ⚠️ Limitations
-
-- Only answers from information present in its knowledge base (no timetables or conferences yet).
-- Cannot access private student spaces (ENT, Moodle).
-- Free-tier LLM: slow responses or "too many requests" errors are possible.
-
-##  Future Work
-
-- Extend to other university programs (modular architecture)
-- Performance optimization (caching, parallel vector search)
-- Conversation history, timetables, events
-- Handling of more complex data
+- Adapt it to other university programs.
+- Make it faster (caching, parallel search).
+- Add timetables and events.
+- Handle more complex data.
 
 ---
 
-## 👤 Author
+## Author
 
 **Aya El Majjouti**, Licence 3 MIAGE, Université Toulouse Capitole
 Supervisor: **Chihab Hanachi**
-
-## 🙏 Acknowledgements
 
 Thanks to M. Chihab Hanachi, M. Alain Berro and Mme Leila Moudjari.
