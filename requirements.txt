@@ -9,3 +9,4 @@ pypdf
 numpy 
 langchain
 langchain-text-splitters
+torchvision
