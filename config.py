@@ -8,7 +8,7 @@ class Config:
     TARGET_URL = "https://miage.ut-capitole.fr/accueil/international/master-innovative-information-systems-2is"
     
     # Example: "https://example.com/path/to/document.pdf"
-    PDF_URLS = ["https://miage.ut-capitole.fr/medias/fichier/final-new-2024-flyer-master-2is_1729089997241-pdf?ID_FICHE=573467&INLINE=FALSE","https://miage.ut-capitole.fr/medias/fichier/syllabus-book-2024-25_1738767357979-pdf?ID_FICHE=573467&INLINE=FALSE","https://miage.ut-capitole.fr/medias/fichier/final-en-24-25-livret-accueil-etudiant_1730728450007-pdf?ID_FICHE=573467&INLINE=FALSE"]
+    PDF_URLS = ["https://miage.ut-capitole.fr/medias/fichier/final-new-2024-flyer-master-2is_1729089997241-pdf?ID_FICHE=573467&INLINE=FALSE","https://www.ut-capitole.fr/medias/fichier/syllabus-book-2is-2026_1770894028719-pdf","https://miage.ut-capitole.fr/medias/fichier/final-en-24-25-livret-accueil-etudiant_1730728450007-pdf?ID_FICHE=573467&INLINE=FALSE"]
 
      # Automatically find the syllabus PDF URL for providing helpful suggestions
     SYLLABUS_PDF_URL = next((url for url in PDF_URLS if "syllabus-book" in url), None)
